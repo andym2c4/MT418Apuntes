@@ -1,0 +1,105 @@
+#include "DSP2833x_Device.h"
+#include "DSP2833x_Examples.h"
+
+//********************* DEF DE FUNCIONES ******************************
+void Gpio_select(void);// definiendo una funcion auxiliar de configuracion de puertos
+void proceso(void);// definiendo una funcion auxiliar de proceso
+void delay_1s(void);// definiendo delay de 60 segundos
+void abrirV2(void);
+void activarMezclado(void);
+//*********************** VARIABLES GLOBALES *********************************
+int terminarMezclado=0;
+//*********************** MAIN ***************************************
+void main(){
+	InitSysCtrl();   // es una funcion de configuracion inicial DEL REGISTRO DE CONTROL ubicada en el programa DSP2833x_SysCtrl.c
+	Gpio_select();   //  ejecutando la funcion auxiliar de configuracion de puertos
+	DINT;
+	InitPieCtrl();    // es una funcion de configuracion inicial DEL REGISTRO PIE ubicada en el programa  DSP2833x_PieCtrl.c
+	// Disable CPU interrupts and clear all CPU interrupt flags:
+	IER = 0x0000;
+	IFR = 0x0000;
+	InitPieVectTable();  // es una funcion de configuracion inicial ubicada en el programa  DSP2833x_PieVect.c
+	proceso();
+}
+
+//******************** FUNCIONES ************************************
+void Gpio_select(void){//define entradas y salidas
+    EALLOW;
+    GpioCtrlRegs.GPAMUX1.all = 0x00000000; // All GPIO
+    GpioCtrlRegs.GPBMUX1.all = 0x00000000; // All GPIO
+
+    GpioCtrlRegs.GPADIR.all = 0x00000000;   // All Port A inputs
+    GpioCtrlRegs.GPBDIR.all = 0xFFFFFFFF;   // All Port B outputs
+    EDIS;
+}
+
+void proceso(void){
+	//DEFINIENDO MACROS
+	//ENTRADA A: 0->31
+	#define P       	GpioDataRegs.GPADAT.bit.GPIO2
+	#define DL       	GpioDataRegs.GPADAT.bit.GPIO4
+	#define DV       	GpioDataRegs.GPADAT.bit.GPIO6
+	#define SP1			GpioDataRegs.GPADAT.bit.GPIO8
+    #define SP2		    GpioDataRegs.GPADAT.bit.GPIO10
+	//SALIDA B: 32->63
+	#define v1			GpioDataRegs.GPBDAT.bit.GPIO32
+	#define v2			GpioDataRegs.GPBDAT.bit.GPIO33
+	#define v3			GpioDataRegs.GPBDAT.bit.GPIO34
+	#define VA			GpioDataRegs.GPBDAT.bit.GPIO48
+	#define VB			GpioDataRegs.GPBDAT.bit.GPIO59
+	#define M			GpioDataRegs.GPBDAT.bit.GPIO61
+	GpioDataRegs.GPBDAT.all = 0x00000000;
+
+	while(1){ //loop
+		if (P==1){
+			//llenadoAguaTanque------------------
+		    while(DL!=1){
+		    	v1=1;//v1=1 - llenado del tanque de agua
+		    	//esperar llenado
+		    }
+		    if(DL==1){
+		    	v1=0;//se apaga el llenado porque alcanzo el limite DL
+		    }
+		    //-----------------------------------
+		    //llenadoTolvaAcumulativa
+		    while(SP1==0){//mientras que el peso no sea sp1
+		    	VA=1;//lenar del contenido a
+		    }
+		    if(SP1==1){
+		    	VA=0;//apagar A
+		    }
+		    while(SP2==0){//MIENTRAS QUE EL PESO NO SEA SP2
+		    	VB=1;//llenar del contenido B
+		    }
+		    if(SP2==1){
+		    	VB=0;//apagar B
+		    	abrirV2();//dejar caer el contenido por "10 segundos".
+		    	activarMezclado();//activar el mezclado por "30 segundos"
+		    }
+		    while(terminarMezclado==1&&DV==1){
+		    	v3=1;
+		    }
+		    if(DV==0){//si el deposito esta vacio
+		    	terminarMezclado=0;
+		    	v3=0;
+		    }
+		  }
+	}
+}
+void abrirV2(){
+	v2=1;
+	delay_1s();
+	delay_1s();
+	v2=0;
+}
+void activarMezclado(){
+	M=1;
+	delay_1s();
+	delay_1s();
+	M=0;
+	terminarMezclado=1;
+}
+void delay_1s(){
+	long i;
+    for (i = 0; i < 20000000 ; i++) {}
+}
